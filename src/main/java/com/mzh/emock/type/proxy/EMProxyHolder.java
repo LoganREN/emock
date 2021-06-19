@@ -1,17 +1,17 @@
 package com.mzh.emock.type.proxy;
 
-public class EProxyDescription {
+public class EMProxyHolder {
     private Class<?> clz;
     private Object oldBean;
     private Object proxy;
 
-    public EProxyDescription(Object oldBean,Class<?> clz, Object proxy) {
+    public EMProxyHolder(Object oldBean, Class<?> clz, Object proxy) {
         this.oldBean=oldBean;
         this.clz = clz;
         this.proxy = proxy;
     }
 
-    public boolean matched(Object oldBean,Class<?> clz) {
+    public boolean matched(Class<?> clz,Object oldBean) {
         return this.clz==clz && this.oldBean==oldBean;
     }
 

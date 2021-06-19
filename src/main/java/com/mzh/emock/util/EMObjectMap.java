@@ -5,7 +5,7 @@ import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
-public class EObjectMap<K,V> implements Map<K,V> {
+public class EMObjectMap<K,V> implements Map<K,V> {
     private int initSize=16;
     private int curr=0;
     private KV<K,V>[] kv;
@@ -127,7 +127,7 @@ public class EObjectMap<K,V> implements Map<K,V> {
 
     @Override
     public Set<K> keySet() {
-        Set<K> set=new ESet<>();
+        Set<K> set=new EMSet<>();
         for(int i=0;i<curr;i++){
             set.add(kv[i].getK());
         }

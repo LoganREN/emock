@@ -1,26 +1,37 @@
 package com.mzh.emock;
 
+import com.mzh.emock.log.Logger;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Condition;
 import org.springframework.context.annotation.ConditionContext;
 import org.springframework.core.type.AnnotatedTypeMetadata;
 import org.springframework.core.type.ClassMetadata;
+import org.springframework.core.type.MethodMetadata;
 import org.springframework.lang.NonNull;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-@ConfigurationProperties(prefix = "com.mzh")
-public class EMockConfigurationProperties {
-    public static final String PREFIX="com.mzh";
-    public static final String NAME="e-mock";
-    public static final String ENABLED="enabled";
+@ConfigurationProperties(prefix = EMConfigurationProperties.Constant.CONFIGURATION_PREFIX)
+public class EMConfigurationProperties {
+    public static class Constant{
+        public static final String CONFIGURATION_PREFIX="com.mzh.emock";
+        public static final String ENABLED_CONFIGURATION_NAME="enabled";
+        public static final String ENABLED_CONFIGURATION_VALUE="true";
+        public static final String ENABLED_FILTER="filter";
+        public static final String PROPERTIES_FILE_NAME=CONFIGURATION_PREFIX+"-com.mzh.emock.EMConfigurationProperties";
+    }
+    public static final List<String> FILTER=new ArrayList<>();
     public static long WAIT_FOR_APPLICATION_READY=5*60*1000L;
-    public static String ENABLED_PROCESSOR="";
+    public static String ENABLED_PROCESSOR="com.mzh.emock.processor.EMApplicationReadyProcessor";
     public static final  List<String> ENABLED_PROFILES= Collections.synchronizedList(new ArrayList<String>(){{add("test");add("dev");}});
     public static final List<String> SCAN_PATH=Collections.synchronizedList(new ArrayList<>());
 
+    private Logger logger=Logger.get(EMConfigurationProperties.class);
+    public EMConfigurationProperties(){
+        logger.info("EMConfigurationProperties loaded");
+    }
 
 
     public void setEnabledProfiles(@NonNull List<String> profiles){
@@ -40,15 +51,21 @@ public class EMockConfigurationProperties {
         }
         WAIT_FOR_APPLICATION_READY=waitTime;
     }
+
+    public void setFilter(@NonNull List<String> filters){
+        FILTER.clear();
+        FILTER.addAll(filters);
+    }
+
     public void setEnabledProcessor(@NonNull String processorName){
         ENABLED_PROCESSOR=processorName;
     }
 
-    public class ProcessorMatcher implements Condition{
+    public static class ProcessorMatcher implements Condition{
         @Override
         public boolean matches(ConditionContext conditionContext, AnnotatedTypeMetadata annotatedTypeMetadata) {
-            if(annotatedTypeMetadata instanceof ClassMetadata){
-                return ((ClassMetadata)annotatedTypeMetadata).getClassName().equals(ENABLED_PROCESSOR);
+            if(annotatedTypeMetadata instanceof MethodMetadata){
+                return ((MethodMetadata)annotatedTypeMetadata).getReturnTypeName().equals(ENABLED_PROCESSOR);
             }
             return false;
         }

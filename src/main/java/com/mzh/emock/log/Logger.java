@@ -1,20 +1,19 @@
 package com.mzh.emock.log;
 
-import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.Marker;
 
-public class LogSupport {
-    private static final String LOG_PREFIX="*****===============*****";
-    private static final String LOG_SUFFIX="*****===============*****";
-    private Logger logger;
-    public static LogSupport getLogger(Class<?> clz){
-        LogSupport support=new LogSupport();
+public class Logger {
+    private static final String LOG_PREFIX="*************************============================================================*************************";
+    private static final String LOG_SUFFIX="*************************============================================================*************************";
+    private org.slf4j.Logger logger;
+    public static Logger get(Class<?> clz){
+        Logger support=new Logger();
         support.logger=LoggerFactory.getLogger(clz);
         return support;
     }
     private String format(String msg){
-        return "\r\n"+LOG_SUFFIX
+        return "\r\n"+LOG_PREFIX
                 +"\r\n\t"
                 +msg.replace("\r","\t\r")
                 +"\r\n"

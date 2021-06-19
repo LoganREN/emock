@@ -5,7 +5,7 @@ import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 
-public class ESet<K> implements Set<K> {
+public class EMSet<K> implements Set<K> {
     private int initSize=16;
     private int curr=0;
     private K[] ks;

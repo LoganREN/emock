@@ -1,21 +1,26 @@
 package com.mzh.emock.type.bean.definition;
 
-import com.mzh.emock.type.bean.EMockBeanWrapper;
+import com.mzh.emock.type.bean.EMBeanWrapper;
 import org.springframework.lang.NonNull;
+import org.springframework.util.PatternMatchUtils;
 
-public class EMockBeanInfoDefinition<T> {
+public class EMBeanDefinition<T> {
     private Class<T> classMatcher;
     private String nameMatcher;
-    private EMockBeanWrapper<T> wrapper;
+    private EMBeanWrapper<T> wrapper;
 
+    public boolean isMatch(String beanName,Object oldBean){
+        return (nameMatcher == null || PatternMatchUtils.simpleMatch(nameMatcher, beanName))
+                && classMatcher.isAssignableFrom(oldBean.getClass());
+    }
 
-    public EMockBeanInfoDefinition(Class<T> mockedClass, EMockBeanWrapper<T> wrapper){
+    public EMBeanDefinition(Class<T> mockedClass, EMBeanWrapper<T> wrapper){
         initial(mockedClass,null,wrapper);
     }
-    public EMockBeanInfoDefinition(Class<T> classMatcher, @NonNull String nameMatcher, EMockBeanWrapper<T> beanWrapper){
+    public EMBeanDefinition(Class<T> classMatcher, @NonNull String nameMatcher, EMBeanWrapper<T> beanWrapper){
         initial(classMatcher,nameMatcher,beanWrapper);
     }
-    private void initial(Class<T> mockedClass,String nameMatcher,EMockBeanWrapper<T> beanWrapper){
+    private void initial(Class<T> mockedClass, String nameMatcher, EMBeanWrapper<T> beanWrapper){
         this.nameMatcher=nameMatcher;
         this.classMatcher=mockedClass;
         this.wrapper=beanWrapper;
@@ -38,11 +43,11 @@ public class EMockBeanInfoDefinition<T> {
     }
 
 
-    public EMockBeanWrapper<T> getWrapper() {
+    public EMBeanWrapper<T> getWrapper() {
         return wrapper;
     }
 
-    public void setWrapper(EMockBeanWrapper<T> wrapper) {
+    public void setWrapper(EMBeanWrapper<T> wrapper) {
         this.wrapper = wrapper;
     }
 }

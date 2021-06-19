@@ -3,12 +3,12 @@ package com.mzh.emock.util;
 import java.lang.reflect.Field;
 import java.util.*;
 
-public class EObjectMatcher {
+public class EMObjectMatcher {
     private static Object[] hasRead = new Object[500];
     private static int curr=0;
     private static Object currentTarget=null;
 
-    private final Map<Object,List<FieldDescription>> holdingObject=new EObjectMap<>();
+    private final Map<Object,List<FieldInfo>> holdingObject=new EMObjectMap<>();
     private boolean hasRead(Object o){
         for(int i=0;i<curr;i++){
             if(o==hasRead[i]){
@@ -21,27 +21,27 @@ public class EObjectMatcher {
         if(curr==hasRead.length){
             hasRead=Arrays.copyOf(hasRead,hasRead.length*2);
         }
-        if(curr % 10000==0)
-            System.out.println(curr);
+        if(curr % 50000==0)
+            System.out.println("EM-ObjectMatcher Handling : currTarget:"+currentTarget+",handleCount:"+curr+"-"+(curr+50000)+"...");
         hasRead[curr]=o;
         curr++;
     }
 
-    private EObjectMatcher() {
+    private EMObjectMatcher() {
     }
 
-    public static class FieldDescription {
-        public FieldDescription(int index) {
+    public static class FieldInfo {
+        public FieldInfo(int index) {
             this.index = index;
             this.isArrayIndex = true;
         }
 
-        public FieldDescription(Field field) {
+        public FieldInfo(Field field) {
             this.nativeField = field;
             this.isArrayIndex = false;
         }
 
-        private boolean isArrayIndex;
+        private final boolean isArrayIndex;
         private Field nativeField;
         private int index;
 
@@ -58,43 +58,48 @@ public class EObjectMatcher {
         }
     }
 
-    public static Map<Object,List<FieldDescription>> match(Object src, Object target) throws Exception {
+    public static Map<Object,List<FieldInfo>> match(Object src, Object target) {
         if(target!=currentTarget){
             hasRead=new Object[500];
             curr=0;
+            currentTarget=target;
         }
-        EObjectMatcher result = new EObjectMatcher();
+        EMObjectMatcher result = new EMObjectMatcher();
         result.getAllDeclaredFieldsHierarchy(src, result.holdingObject, target);
         return result.holdingObject;
     }
 
 
-    private void getAllDeclaredFieldsHierarchy(Object src, Map<Object, List<FieldDescription>> holdingObject, Object target) throws Exception {
+    private void getAllDeclaredFieldsHierarchy(Object src, Map<Object, List<FieldInfo>> holdingObject, Object target) {
         if (src == null || hasRead(src)) {
             return;
         }
-        addRead(src);
-        List<Field> fields = getAllDeclaredFields(src.getClass());
-        for (Field field : fields) {
-            field.setAccessible(true);
-            Object value = field.get(src);
-            if (value == null) {
-                continue;
+        try {
+            addRead(src);
+            List<Field> fields = getAllDeclaredFields(src.getClass());
+            for (Field field : fields) {
+                field.setAccessible(true);
+                Object value = field.get(src);
+                if (value == null) {
+                    continue;
+                }
+                if (field.getType().isArray()) {
+                    findInArray((Object[]) value, holdingObject, target);
+                    continue;
+                }
+                if (value == target) {
+                    if (holdingObject.get(src) == null)
+                        holdingObject.computeIfAbsent(src, k -> new ArrayList<>());
+                    holdingObject.get(src).add(new FieldInfo(field));
+                }
+                getAllDeclaredFieldsHierarchy(value, holdingObject, target);
             }
-            if (field.getType().isArray()) {
-                findInArray((Object[]) value, holdingObject, target);
-                continue;
-            }
-            if (value == target) {
-                if (holdingObject.get(src) == null)
-                    holdingObject.computeIfAbsent(src, k -> new ArrayList<>());
-                holdingObject.get(src).add(new FieldDescription(field));
-            }
-            getAllDeclaredFieldsHierarchy(value, holdingObject, target);
+        }catch (Exception ex){
+            ex.printStackTrace();
         }
     }
 
-    private void findInArray(Object[] src, Map<Object, List<FieldDescription>> holdingObject, Object target) throws Exception {
+    private void findInArray(Object[] src, Map<Object, List<FieldInfo>> holdingObject, Object target) {
         if (src == null || hasRead(src)) {
             return;
         }
@@ -111,7 +116,7 @@ public class EObjectMatcher {
             if (value == target) {
                 if (holdingObject.get(src) == null)
                     holdingObject.computeIfAbsent(src, k -> new ArrayList<>());
-                holdingObject.get(src).add(new FieldDescription(i));
+                holdingObject.get(src).add(new FieldInfo(i));
             }
             getAllDeclaredFieldsHierarchy(value, holdingObject, target);
         }
@@ -130,7 +135,7 @@ public class EObjectMatcher {
 
     private List<Field> getAllDeclaredFields(Class<?> clz) {
         List<Field> res = new ArrayList<>();
-        EMockUtil.optWithParent(clz, c -> {
+        EMUtil.optWithParent(clz, c -> {
             Field[] fields = c.getDeclaredFields();
             for (Field field : fields) {
                 if (isReferenceField(field.getType())) {

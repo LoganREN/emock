@@ -10,9 +10,8 @@ import java.lang.annotation.Target;
 
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)
-public @interface EMockBean {
+public @interface EMBean {
     int order() default Ordered.LOWEST_PRECEDENCE;
-    InjectPoint injectPoint() default InjectPoint.AFTER_APPLICATION_READY;
     Class<?>[] injectExclude() default {};
     enum InjectPoint{
         AFTER_APPLICATION_READY,

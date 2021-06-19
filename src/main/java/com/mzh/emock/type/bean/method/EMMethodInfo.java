@@ -1,14 +1,12 @@
 package com.mzh.emock.type.bean.method;
 
-import com.mzh.emock.util.EObjectMap;
-
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
 
-public class EMockMethodInfo {
+public class EMMethodInfo {
     private String name;
-    private Map<String, EMockMethodInvoker<Object,Object[]>> dynamicInvokers=new HashMap<>();
+    private Map<String, EMMethodInvoker<Object,Object[]>> dynamicInvokers=new HashMap<>();
     private Method nativeMethod;
     private String enabledInvoker;
 
@@ -20,11 +18,11 @@ public class EMockMethodInfo {
         this.name = name;
     }
 
-    public Map<String, EMockMethodInvoker<Object, Object[]>> getDynamicInvokers() {
+    public Map<String, EMMethodInvoker<Object, Object[]>> getDynamicInvokers() {
         return dynamicInvokers;
     }
 
-    public void setDynamicInvokers(Map<String, EMockMethodInvoker<Object, Object[]>> dynamicInvokers) {
+    public void setDynamicInvokers(Map<String, EMMethodInvoker<Object, Object[]>> dynamicInvokers) {
         this.dynamicInvokers = dynamicInvokers;
     }
 

@@ -1,13 +1,13 @@
 package com.mzh.emock.core;
 
-import com.mzh.emock.type.bean.EMockBeanInfo;
-import com.mzh.emock.type.bean.definition.EMockBeanCreationMethodDefinition;
-import com.mzh.emock.type.bean.definition.EMockBeanInfoDefinition;
-import com.mzh.emock.type.bean.method.EMockMethodInfo;
-import com.mzh.emock.type.bean.method.EMockMethodInvoker;
-import com.mzh.emock.type.bean.method.EMockMethodInvoker.*;
-import com.mzh.emock.type.proxy.EProxyDescription;
-import com.mzh.emock.util.EObjectMap;
+import com.mzh.emock.type.bean.EMBeanInfo;
+import com.mzh.emock.type.bean.definition.EMBeanDefinitionSource;
+import com.mzh.emock.type.bean.definition.EMBeanDefinition;
+import com.mzh.emock.type.bean.method.EMMethodInfo;
+import com.mzh.emock.type.bean.method.EMMethodInvoker;
+import com.mzh.emock.type.bean.method.EMMethodInvoker.*;
+import com.mzh.emock.type.proxy.EMProxyHolder;
+import com.mzh.emock.util.EMObjectMap;
 import org.springframework.cglib.proxy.MethodInterceptor;
 import org.springframework.cglib.proxy.MethodProxy;
 
@@ -18,17 +18,17 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-public class EMockCache {
+public class EMCache {
 
-    public static final List<EMockBeanCreationMethodDefinition<?>> mockBeanCreationMethodDefinitions = new ArrayList<>();
+    public static final List<EMBeanDefinitionSource<?>> EM_DEFINITION_SOURCES = new ArrayList<>();
 
-    public static final List<EMockBeanInfoDefinition<?>> mockBeanInfoDefinitions = new ArrayList<>();
+    public static final List<EMBeanDefinition<?>> EM_DEFINITIONS = new ArrayList<>();
 
-    public static final Map<EMockBeanInfoDefinition<?>,EMockBeanCreationMethodDefinition<?>> definitionRelation=new EObjectMap<>();
+    public static final Map<EMBeanDefinition<?>, EMBeanDefinitionSource<?>> EM_DEFINITION_RELATION=new EMObjectMap<>();
 
-    public static final Map<Object, List<EMockBeanInfo<?>>> mockObjectMap = new EObjectMap<>();
+    public static final Map<Object, List<EMBeanInfo<?>>> EM_OBJECT_MAP = new EMObjectMap<>();
 
-    public static final List<EProxyDescription> cachedProxy = new ArrayList<>();
+    public static final List<EMProxyHolder> EM_CACHED_PROXY = new ArrayList<>();
 
     static class ESimpleInvoker implements SimpleInvoker<Object, Object[]> {
         private final Object bean;
@@ -46,16 +46,16 @@ public class EMockCache {
     }
 
     private static Object doMock(Object o, Method method, Object[] args, Object oldBean) throws Exception {
-        List<EMockBeanInfo<?>> mockBeanInfoList = mockObjectMap.get(oldBean);
+        List<EMBeanInfo<?>> mockBeanInfoList = EM_OBJECT_MAP.get(oldBean);
         if (mockBeanInfoList == null || mockBeanInfoList.size()==0) {
             return null;
         }
-        for(EMockBeanInfo<?> mockBeanInfo:mockBeanInfoList){
+        for(EMBeanInfo<?> mockBeanInfo:mockBeanInfoList){
             if(mockBeanInfo.isMocked()){
-                Map<String, EMockMethodInfo> invokeMethods = mockBeanInfo.getInvokeMethods();
-                EMockMethodInfo methodInfo = invokeMethods.get(method.getName());
+                Map<String, EMMethodInfo> invokeMethods = mockBeanInfo.getInvokeMethods();
+                EMMethodInfo methodInfo = invokeMethods.get(method.getName());
                 if (methodInfo.getEnabledInvoker() != null) {
-                    EMockMethodInvoker<Object, Object[]> dynamicInvoker = methodInfo.getDynamicInvokers().get(methodInfo.getEnabledInvoker());
+                    EMMethodInvoker<Object, Object[]> dynamicInvoker = methodInfo.getDynamicInvokers().get(methodInfo.getEnabledInvoker());
                     return dynamicInvoker.invoke(new ESimpleInvoker(oldBean, method), new ESimpleInvoker(mockBeanInfo.getMockedBean(), method), args);
                 }
                 return method.invoke(mockBeanInfo.getMockedBean(), args);
@@ -78,10 +78,10 @@ public class EMockCache {
         }
     }
 
-    public static class PObjectEnhanceInterceptor implements MethodInterceptor {
+    public static class EObjectEnhanceInterceptor implements MethodInterceptor {
         private final Object oldBean;
 
-        public PObjectEnhanceInterceptor(Object oldBean) {
+        public EObjectEnhanceInterceptor(Object oldBean) {
             this.oldBean = oldBean;
         }
 

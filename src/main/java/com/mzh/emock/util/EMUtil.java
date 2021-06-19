@@ -2,7 +2,7 @@ package com.mzh.emock.util;
 
 import java.util.function.Consumer;
 
-public class EMockUtil {
+public class EMUtil {
     public static void optWithParent(Class<?> curr, Consumer<Class<?>> consumer) {
         while (curr != null) {
             consumer.accept(curr);
