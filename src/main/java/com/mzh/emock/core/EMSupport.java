@@ -6,6 +6,7 @@ import com.mzh.emock.type.EMBean;
 import com.mzh.emock.type.bean.EMBeanInfo;
 import com.mzh.emock.type.bean.definition.EMBeanDefinitionSource;
 import com.mzh.emock.type.bean.definition.EMBeanDefinition;
+import com.mzh.emock.util.EMObjectMap;
 import com.mzh.emock.util.EMObjectMatcher;
 import com.mzh.emock.util.EMProxyTool;
 import com.mzh.emock.util.EMUtil;
@@ -36,6 +37,7 @@ public class EMSupport {
         methods.stream().filter(m->PatternMatchUtils.simpleMatch(matchers,
                 ((ParameterizedType) m.getGenericReturnType()).getActualTypeArguments()[0].getTypeName()))
                 .forEach(m->EMCache.EM_DEFINITION_SOURCES.add(new EMBeanDefinitionSource<>(m)));
+        logger.info("emock : load definitionSource complete : "+EMCache.EM_DEFINITION_SOURCES.size());
     }
 
     public static void createEMDefinition(ApplicationContext context) throws Exception {
@@ -59,10 +61,13 @@ public class EMSupport {
      */
     public static void createEMBeanIfNecessary(String beanName, Object oldBean) {
         EMCache.EM_DEFINITIONS.stream().filter(d->d.isMatch(beanName,oldBean)).forEach(d->{
-            EMCache.EM_OBJECT_MAP.computeIfAbsent(oldBean,l->new ArrayList<>());
+            EMCache.EM_OBJECT_MAP.computeIfAbsent(oldBean,l->new EMObjectMap<>());
             EMBeanInfo<?> newBean=createMockBean(oldBean,d);
-            EMCache.EM_OBJECT_MAP.get(oldBean).add(newBean);
-            EMCache.EM_OBJECT_MAP.values().forEach(l->l.sort(Comparator.comparingInt(a -> a.getEmBeanDefinitionSource().getOrder())));
+            Class<?> defClz=newBean.getEmBeanDefinition().getClassMatcher();
+            EMCache.EM_OBJECT_MAP.get(oldBean).computeIfAbsent(defClz,k->new ArrayList<>());
+            EMCache.EM_OBJECT_MAP.get(oldBean).get(defClz).add(newBean);
+            EMCache.EM_OBJECT_MAP.values().forEach(m->m.values().forEach(
+                    l->l.sort(Comparator.comparingInt(a -> a.getEmBeanDefinitionSource().getOrder()))));
         });
     }
 
@@ -88,34 +93,51 @@ public class EMSupport {
     }
 
     private static void createProxyAndSetField(Object src, Object target) throws Exception {
-        Class<?> defaultClz=EMCache.EM_OBJECT_MAP.get(target).get(0).getEmBeanDefinition().getClassMatcher();
         Map<Object, List<EMObjectMatcher.FieldInfo>> matchedObject = EMObjectMatcher.match(src, target);
         for (Object holder : matchedObject.keySet()) {
             List<EMObjectMatcher.FieldInfo> fields = matchedObject.get(holder);
             for(int i=fields.size()-1;i>=0;i--){
-                createProxyAndSetField(fields.get(i),holder,target,defaultClz);
+                createProxyAndSetField(fields.get(i),holder,target);
             }
         }
     }
-    private static void createProxyAndSetField(EMObjectMatcher.FieldInfo info, Object holder,Object target,Class<?> defaultClz) throws Exception {
+    private static void createProxyAndSetField(EMObjectMatcher.FieldInfo info, Object holder,Object target) throws Exception {
         if(info.isArrayIndex()){
             Object old=((Object[])holder)[info.getIndex()];
             if(old==target) {
-                Object proxy = EMProxyTool.createProxy(defaultClz, target);
+                Class<?> clz=findBestMatchClz(target,info.getNativeField().getType().getComponentType());
+                Object proxy = EMProxyTool.createProxy(clz, target);
                 ((Object[]) holder)[info.getIndex()] = proxy;
             }else{
                 logger.error("array object index changed "+",obj:"+holder);
             }
         }else{
-            Class<?> fieldClz=info.getNativeField().getType();
-            if(fieldClz.isAssignableFrom(defaultClz)){
-                fieldClz=defaultClz;
-            }
-            Object proxy= EMProxyTool.createProxy(fieldClz, target);
+            Class<?> clz=findBestMatchClz(target,info.getNativeField().getType());
+            Object proxy= EMProxyTool.createProxy(clz, target);
             info.getNativeField().setAccessible(true);
             info.getNativeField().set(holder,proxy);
         }
     }
+
+    private static Class<?> findBestMatchClz(Object oldBean,Class<?> fieldClz){
+        Set<Class<?>> curr=EMCache.EM_OBJECT_MAP.get(oldBean).keySet();
+        Class<?> bestMatch=null;
+        for(Class<?> c:curr){
+            if(fieldClz.isAssignableFrom(c)){
+                if(fieldClz==c){
+                    return fieldClz;
+                }
+                if(bestMatch==null){
+                    bestMatch=c;
+                }
+                if(bestMatch.isAssignableFrom(c)){
+                    bestMatch=c;
+                }
+            }
+        }
+        return bestMatch;
+    }
+
 
 
     private static String[] loadEMNameMatcher(ApplicationContext context) {
@@ -124,7 +146,7 @@ public class EMSupport {
             return new String[]{};
         }
         List<String> filters=EMConfigurationProperties.FILTER;
-        return filters.size() == 0 ? new String[]{} : filters.toArray(new String[0]);
+        return filters.size() == 0 ? new String[]{"*"} : filters.toArray(new String[0]);
     }
 
     private static boolean isEMEnvironment(Environment environment) {

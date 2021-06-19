@@ -26,7 +26,7 @@ public class EMCache {
 
     public static final Map<EMBeanDefinition<?>, EMBeanDefinitionSource<?>> EM_DEFINITION_RELATION=new EMObjectMap<>();
 
-    public static final Map<Object, List<EMBeanInfo<?>>> EM_OBJECT_MAP = new EMObjectMap<>();
+    public static final Map<Object, Map<Class<?>,List<EMBeanInfo<?>>>> EM_OBJECT_MAP = new EMObjectMap<>();
 
     public static final List<EMProxyHolder> EM_CACHED_PROXY = new ArrayList<>();
 
@@ -45,9 +45,13 @@ public class EMCache {
         }
     }
 
-    private static Object doMock(Object o, Method method, Object[] args, Object oldBean) throws Exception {
-        List<EMBeanInfo<?>> mockBeanInfoList = EM_OBJECT_MAP.get(oldBean);
-        if (mockBeanInfoList == null || mockBeanInfoList.size()==0) {
+    private static Object doMock(Object o, Method method, Object[] args, Object oldBean,Class<?> injectClz) throws Exception {
+        Map<Class<?>,List<EMBeanInfo<?>>> clzBeanMap = EM_OBJECT_MAP.get(oldBean);
+        if (clzBeanMap == null || clzBeanMap.size()==0) {
+            return null;
+        }
+        List<EMBeanInfo<?>> mockBeanInfoList= clzBeanMap.get(injectClz);
+        if(mockBeanInfoList==null || mockBeanInfoList.size()==0){
             return null;
         }
         for(EMBeanInfo<?> mockBeanInfo:mockBeanInfoList){
@@ -64,48 +68,51 @@ public class EMCache {
         return null;
     }
 
-    public static class EInterfaceProxyInvocationHandler implements InvocationHandler {
-        private final Object oldBean;
-
-        public EInterfaceProxyInvocationHandler(Object oldBean) {
-            this.oldBean = oldBean;
+    public static class EInterfaceProxyInvocationHandler extends EInvocationHandler implements InvocationHandler {
+        public EInterfaceProxyInvocationHandler(Object oldBean,Class<?> injectClz) {
+            super(oldBean,injectClz);
         }
 
         @Override
         public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-            Object mock = doMock(proxy, method, args, oldBean);
+            Object mock = doMock(proxy, method, args, oldBean,injectClz);
             return mock == null ? method.invoke(oldBean, args) : mock;
         }
     }
 
-    public static class EObjectEnhanceInterceptor implements MethodInterceptor {
-        private final Object oldBean;
-
-        public EObjectEnhanceInterceptor(Object oldBean) {
-            this.oldBean = oldBean;
+    public static class EObjectEnhanceInterceptor extends EInvocationHandler implements MethodInterceptor {
+        public EObjectEnhanceInterceptor(Object oldBean,Class<?> injectClz) {
+            super(oldBean,injectClz);
         }
 
         @Override
         public Object intercept(Object o, Method method, Object[] objects, MethodProxy methodProxy) throws Throwable {
-            Object mock = doMock(o, method, objects, oldBean);
+            Object mock = doMock(o, method, objects, oldBean,injectClz);
             return mock == null ? method.invoke(oldBean, objects) : mock;
         }
     }
 
-    public static class EProxyHandlerEnhanceInterceptor implements MethodInterceptor {
+    public static class EProxyHandlerEnhanceInterceptor extends EInvocationHandler implements MethodInterceptor {
         private final InvocationHandler oldHandler;
-        private final Object oldBean;
 
-        public EProxyHandlerEnhanceInterceptor(InvocationHandler oldHandler, Object oldBean) {
-            this.oldBean = oldBean;
+        public EProxyHandlerEnhanceInterceptor(InvocationHandler oldHandler, Object oldBean,Class<?> injectClz) {
+            super(oldBean, injectClz);
             this.oldHandler = oldHandler;
         }
 
         @Override
         public Object intercept(Object o, Method method, Object[] objects, MethodProxy methodProxy) throws Throwable {
             Method realMethod = (Method) objects[1];
-            Object mock = doMock(o, realMethod, (Object[]) objects[2], oldBean);
+            Object mock = doMock(o, realMethod, (Object[]) objects[2], oldBean,injectClz);
             return mock == null ? oldHandler.invoke(oldBean, realMethod, (Object[]) objects[2]) : mock;
+        }
+    }
+    public static abstract class EInvocationHandler{
+        protected final Object oldBean;
+        protected final Class<?> injectClz;
+        public EInvocationHandler(Object oldBean,Class<?> injectClz){
+            this.oldBean=oldBean;
+            this.injectClz=injectClz;
         }
     }
 

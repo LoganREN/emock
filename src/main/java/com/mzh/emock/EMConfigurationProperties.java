@@ -19,7 +19,7 @@ public class EMConfigurationProperties {
         public static final String CONFIGURATION_PREFIX="com.mzh.emock";
         public static final String ENABLED_CONFIGURATION_NAME="enabled";
         public static final String ENABLED_CONFIGURATION_VALUE="true";
-        public static final String ENABLED_FILTER="filter";
+        public static final String ENABLED_MANAGER_NAME="enabled-manager";
         public static final String PROPERTIES_FILE_NAME=CONFIGURATION_PREFIX+"-com.mzh.emock.EMConfigurationProperties";
     }
     public static final List<String> FILTER=new ArrayList<>();

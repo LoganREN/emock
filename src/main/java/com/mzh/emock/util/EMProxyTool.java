@@ -17,7 +17,8 @@ public class EMProxyTool {
             return cached;
         }
         ClassLoader loader= EMProxyTool.class.getClassLoader();
-        Object proxy=(targetClz.isInterface() ? createInterfaceProxy(new Class<?>[]{targetClz}, oldBean,loader) : createClassProxy(oldBean,loader));
+        Object proxy=(targetClz.isInterface() ? createInterfaceProxy(new Class<?>[]{targetClz}, oldBean,loader)
+                : createClassProxy(oldBean,loader,targetClz));
         EMCache.EM_CACHED_PROXY.add(new EMProxyHolder(oldBean,targetClz,proxy));
         return proxy;
     }
@@ -26,14 +27,14 @@ public class EMProxyTool {
         if (oldBean instanceof Proxy) {
             InvocationHandler oldHandler = Proxy.getInvocationHandler(oldBean);
             return Proxy.newProxyInstance(loader, interfaces,
-                    createEnhance(oldHandler, new EMCache.EProxyHandlerEnhanceInterceptor(oldHandler, oldBean),loader));
+                    createEnhance(oldHandler, new EMCache.EProxyHandlerEnhanceInterceptor(oldHandler, oldBean,interfaces[0]),loader));
         }
-        return Proxy.newProxyInstance(loader, interfaces, new EMCache.EInterfaceProxyInvocationHandler(oldBean));
+        return Proxy.newProxyInstance(loader, interfaces, new EMCache.EInterfaceProxyInvocationHandler(oldBean,interfaces[0]));
     }
 
 
-    private static Object createClassProxy(Object oldBean,ClassLoader loader) {
-        return createEnhance(oldBean, new EMCache.EObjectEnhanceInterceptor(oldBean),loader);
+    private static Object createClassProxy(Object oldBean,ClassLoader loader,Class<?> injectClz) {
+        return createEnhance(oldBean, new EMCache.EObjectEnhanceInterceptor(oldBean,injectClz),loader);
     }
 
     private static Object findCreatedProxy(Class<?> targetClz,Object oldBean){
