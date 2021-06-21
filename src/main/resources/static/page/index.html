@@ -28,6 +28,7 @@
             <input id="decode" type="button" value="decode"/>
             <input id="removeInovker" type="button" value="removeInovker">
             <input type="button" value="saveLocal" id="saveLocal">
+            <input type="button" value="saveLocalAndEnabled" id="saveLocalAndEnabled">
         </div>
         <div>
             <span>Encode Code:</span>
@@ -62,12 +63,12 @@
             xhr.onload=function(){
                 if(xhr.status==200){
                     co=JSON.parse(xhr.responseText);
-                    document.getElementById("context").value=JSON.stringify(co,null,'   ');
+                    refreshContext();
                 }else{
                     alert(xhr.status+"-"+xhr.statusText);
                 }
             }
-            xhr.send();
+                xhr.send();
         }
         document.getElementById('update').onclick=function(){
             var xhr=new XMLHttpRequest();
@@ -87,47 +88,67 @@
 
 
         //本次操作类别
-        function findInvoker(onlyParent){
+
+        function findMatchedBean(){
             var beanId=document.getElementById('mockBeanId').value;
-            var methodName=document.getElementById('methodName').value;
-            var invokerName=document.getElementById('invokerName').value;
-            var parent=null;
             for(var i=0;i<co.length;i++){
-                var targetClzs=Object.keys(co[i].emInfo.beanInfo);
-                for(var j=0;j<targetClzs.length;j++){
+            if(co[i].emInfo==undefined || co[i].emInfo==null || co[i].emInfo.beanInfo==undefined || co[i].emInfo.beanInfo==null){continue;}
+            var targetClzs=Object.keys(co[i].emInfo.beanInfo);
+            for(var j=0;j<targetClzs.length;j++){
                     var beans=co[i].emInfo.beanInfo[targetClzs[j]];
                     for(var f=0;f<beans.length;f++){
                     if(beans[f].id==beanId){
-                        for(var k=0;k<beans[f].methodInfo.length;k++){
-                            if(beans[f].methodInfo[k].methodName==methodName){
-                                var invokers=beans[f].methodInfo[k].dynamicInvokes;
-                                var invokerNames=Object.keys(invokers);
-                                for(var x=0;x<invokerNames.length;x++){
-                                    if(invokerNames[x]==invokerName){
-                                       // invoker=invokers[invokerName];
-                                        parent=beans[f].methodInfo[k].dynamicInvokes;
-                                    }
-                                }
-                                if(parent==null && onlyParent){
-                                    parent=beans[f].methodInfo[k].dynamicInvokes;
-                                }
-                            }
-                        }
-                    }
+                        return beans[f];
                     }
                 }
             }
-            return parent;
+           }
+           return null;
+        }
+        function findMatchedMethodInfo(){
+            var bean=findMatchedBean();
+            if(bean==null || bean==undefined){
+                return null;
+            }
+            var methodName=document.getElementById('methodName').value;
+            for(var k=0;k<bean.methodInfo.length;k++){
+                if(bean.methodInfo[k].methodName==methodName){
+                    return bean.methodInfo[k];
+                }
+            }
+            return null;
+        }
+        function findMatchedInvokerList(){
+            var methodInfo=findMatchedMethodInfo();
+            if(methodInfo==null || methodInfo==undefined){
+                return null;
+            }
+            return methodInfo.dynamicInvokes;
+
+        }
+        function findMatchedInvoker(){
+            var invokerName=document.getElementById('invokerName').value;
+            var invokerList=findMatchedInvokerList();
+            if(invokerList==null || invokerList==undefined){
+                return null;
+            }
+            var invokerNames=Object.keys(invokerList);
+            for(var x=0;x<invokerNames.length;x++){
+                if(invokerNames[x]==invokerName){
+                    return invokerList[invokerName];
+                }
+            }
+            return null;
         }
 
+
         document.getElementById('decode').onclick=function(){
-            var parent=findInvoker(false);
-            if(parent==null){
+            var invoker=findMatchedInvoker();
+            if(invoker==null){
                 alert('no matched invoker');
                 return;
             }
-            var invokerName=document.getElementById('invokerName').value;
-            var code=parent[invokerName].srcCode;
+            var code=invoker.srcCode;
             var importPart=code.split('_')[0];
             var codePart=code.split('_')[1];
             document.getElementById('encodeCode').value=code;
@@ -135,34 +156,50 @@
             document.getElementById('codePart').value=atob(codePart);
         }
         document.getElementById("removeInovker").onclick=function(){
-            var parent=findInvoker(false);
-            if(parent==null){
+            var invoker=findMatchedInvoker();
+            if(invoker==null){
                 alert('no matched invoker');
                 return;
             }
+            var invokerList=findMatchedInvokerList();
             var invokerName=document.getElementById('invokerName').value;
-            delete parent[invokerName];
-            document.getElementById('context').value=JSON.stringify(co,null,'   ');
+            delete invokerList[invokerName];
+            refreshContext();
         }
 
         document.getElementById("saveLocal").onclick=function(){
-            var parent=findInvoker(true);
-            if(parent==null){
+            var invokerName=document.getElementById('invokerName').value;
+            if(invokerName==null || invokerName=="" || invokerName==undefined){
+                alert("name can not be null");
+                return;
+            }
+            var invokerList=findMatchedInvokerList();
+            if(invokerList==null){
                 alert("no matched invoker");
                return;
             }
+            var importPart=btoa(document.getElementById('importPart').value);
+            var codePart=btoa(document.getElementById('codePart').value);
+            var encCode=importPart+"_"+codePart;
+            document.getElementById('encodeCode').value=encCode;;
+            invokerList[invokerName]={"srcCode":encCode};
+            refreshContext();
+        }
+        document.getElementById("saveLocalAndEnabled").onclick=function(){
             var invokerName=document.getElementById('invokerName').value;
-                var importPart=btoa(document.getElementById('importPart').value);
-                var codePart=btoa(document.getElementById('codePart').value);
-                var encCode=importPart+"_"+codePart;
-                document.getElementById('encodeCode').value=encCode;;
-                parent[invokerName]={"srcCode":encCode};
-                document.getElementById('context').value=JSON.stringify(co,null,'   ');
-           
+            if(invokerName==null || invokerName=="" || invokerName==undefined){
+                alert("name can not be null");
+                return;
+            }
+            document.getElementById("saveLocal").onclick();
+            var methodInfo=findMatchedMethodInfo();
+            methodInfo.dynamicInvokeName=invokerName;
+            refreshContext();
         }
 
-
-        
+        function refreshContext(){
+            document.getElementById('context').value=JSON.stringify(co,null,'   ');
+        }
 
 
 </script>

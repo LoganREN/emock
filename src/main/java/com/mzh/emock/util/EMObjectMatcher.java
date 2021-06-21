@@ -9,6 +9,7 @@ public class EMObjectMatcher {
     private static Object[] hasRead = new Object[initSize];
     private static int curr=0;
     private static Object currentTarget=null;
+    private static final List<Class<?>> excludeClz=Arrays.asList(Method.class,Field.class);
 
     private final Map<Object,List<FieldInfo>> holdingObject=new EMObjectMap<>();
     private boolean hasRead(Object o){
@@ -79,7 +80,7 @@ public class EMObjectMatcher {
 
 
     private void getAllDeclaredFieldsHierarchy(Object src, Map<Object, List<FieldInfo>> holdingObject, Object target,List<String> trace) {
-        if (src == null || hasRead(src)) {
+        if (src == null || !isIncludeField(src.getClass()) ||  hasRead(src)) {
             return;
         }
         try {
@@ -92,7 +93,7 @@ public class EMObjectMatcher {
                     continue;
                 }
                 List<String> newTrace=createTrace(trace,field,value,-1);
-                if (field.getType().isArray() && isReferenceField(field.getType())) {
+                if (field.getType().isArray() && isIncludeField(field.getType())) {
                     findInArray((Object[]) value, holdingObject, target,newTrace);
                     continue;
                 }
@@ -119,7 +120,7 @@ public class EMObjectMatcher {
                 continue;
             }
             List<String> newTrace=createTrace(trace,null,value,i);
-            if (value.getClass().isArray() && isReferenceField(value.getClass())) {
+            if (value.getClass().isArray() && isIncludeField(value.getClass())) {
                 findInArray((Object[]) value, holdingObject, target,newTrace);
                 continue;
             }
@@ -149,12 +150,16 @@ public class EMObjectMatcher {
         return srcType;
     }
 
-    private boolean isReferenceField(Class<?> srcType) {
-        Class<?> type=getRawType(srcType);
+    private boolean isReferenceField(Class<?> type) {
         return  !type.isEnum() && !type.isPrimitive() && type != String.class
                 && type != Character.class && type != Boolean.class
                 && type != Byte.class && type != Short.class && type != Integer.class && type != Long.class
                 && type != Float.class && type != Double.class;
+    }
+
+    private boolean isIncludeField(Class<?> srcType){
+        Class<?> type=getRawType(srcType);
+        return isReferenceField(type) && !excludeClz.contains(type);
     }
 
     private List<Field> getAllDeclaredFields(Class<?> clz) {
@@ -162,7 +167,7 @@ public class EMObjectMatcher {
         EMUtil.optWithParent(clz, c -> {
             Field[] fields = c.getDeclaredFields();
             for (Field field : fields) {
-                if (isReferenceField(field.getType())) {
+                if (isIncludeField(field.getType())) {
                     res.add(field);
                 }
             }
