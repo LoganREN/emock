@@ -108,7 +108,7 @@ public class EMObjectMap<K,V> implements Map<K,V> {
 
     @Override
     public V remove(Object key) {
-        System.out.println("not support remove");
+        System.out.println("un-support remove");
         return null;
     }
 
@@ -145,7 +145,7 @@ public class EMObjectMap<K,V> implements Map<K,V> {
 
     @Override
     public Set<Entry<K, V>> entrySet() {
-        System.out.println("un support entrySet");
+        System.out.println("un-support entrySet");
         return null;
     }
 

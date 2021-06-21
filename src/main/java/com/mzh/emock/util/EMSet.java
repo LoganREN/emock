@@ -61,6 +61,7 @@ public class EMSet<K> implements Set<K> {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public boolean add(K k) {
         if(ks==null){
             ks=(K[])new Object[initSize];

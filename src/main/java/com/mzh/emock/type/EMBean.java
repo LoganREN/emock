@@ -12,9 +12,5 @@ import java.lang.annotation.Target;
 @Target(ElementType.METHOD)
 public @interface EMBean {
     int order() default Ordered.LOWEST_PRECEDENCE;
-    Class<?>[] injectExclude() default {};
-    enum InjectPoint{
-        AFTER_APPLICATION_READY,
-        AFTER_BEAN_INITIALIZATION
-    }
+    String name() default "";
 }

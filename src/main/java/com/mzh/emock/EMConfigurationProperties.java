@@ -27,11 +27,10 @@ public class EMConfigurationProperties {
     public static String ENABLED_PROCESSOR="com.mzh.emock.processor.EMApplicationReadyProcessor";
     public static final  List<String> ENABLED_PROFILES= Collections.synchronizedList(new ArrayList<String>(){{add("test");add("dev");}});
     public static final List<String> SCAN_PATH=Collections.synchronizedList(new ArrayList<>());
+    public static boolean MOCK_BEAN_ON_INIT=true;
+    public static boolean MOCK_METHOD_ON_INIT=true;
 
-    private Logger logger=Logger.get(EMConfigurationProperties.class);
-    public EMConfigurationProperties(){
-        logger.info("EMConfigurationProperties loaded");
-    }
+    private final Logger logger=Logger.get(EMConfigurationProperties.class);
 
 
     public void setEnabledProfiles(@NonNull List<String> profiles){
@@ -55,6 +54,14 @@ public class EMConfigurationProperties {
     public void setFilter(@NonNull List<String> filters){
         FILTER.clear();
         FILTER.addAll(filters);
+    }
+
+    public void setMockBeanOnInit(@NonNull boolean isMock){
+        MOCK_BEAN_ON_INIT=isMock;
+    }
+
+    public void setMockMethodOnInit(@NonNull boolean isMock){
+        MOCK_METHOD_ON_INIT=isMock;
     }
 
     public void setEnabledProcessor(@NonNull String processorName){

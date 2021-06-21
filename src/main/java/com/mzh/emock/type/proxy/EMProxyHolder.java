@@ -1,26 +1,16 @@
 package com.mzh.emock.type.proxy;
 
+import com.mzh.emock.util.EMObjectMatcher;
+
+import java.util.ArrayList;
+import java.util.List;
+
 public class EMProxyHolder {
-    private Class<?> clz;
-    private Object oldBean;
     private Object proxy;
+    private List<EMObjectMatcher.FieldInfo> injectField;
 
-    public EMProxyHolder(Object oldBean, Class<?> clz, Object proxy) {
-        this.oldBean=oldBean;
-        this.clz = clz;
+    public EMProxyHolder(Object proxy) {
         this.proxy = proxy;
-    }
-
-    public boolean matched(Class<?> clz,Object oldBean) {
-        return this.clz==clz && this.oldBean==oldBean;
-    }
-
-    public Class<?> getClz() {
-        return clz;
-    }
-
-    public void setClz(Class<?> clz) {
-        this.clz = clz;
     }
 
     public Object getProxy() {
@@ -31,11 +21,19 @@ public class EMProxyHolder {
         this.proxy = proxy;
     }
 
-    public Object getOldBean() {
-        return oldBean;
+
+    public List<EMObjectMatcher.FieldInfo> getInjectField() {
+        return injectField;
     }
 
-    public void setOldBean(Object oldBean) {
-        this.oldBean = oldBean;
+    public void setInjectField(List<EMObjectMatcher.FieldInfo> injectField) {
+        this.injectField = injectField;
+    }
+
+    public void addInjectField(EMObjectMatcher.FieldInfo fieldInfo){
+        if(this.injectField==null){
+            injectField=new ArrayList<>();
+        }
+        injectField.add(fieldInfo);
     }
 }

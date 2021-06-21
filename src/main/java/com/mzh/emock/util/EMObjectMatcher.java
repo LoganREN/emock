@@ -1,10 +1,12 @@
 package com.mzh.emock.util;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.*;
 
 public class EMObjectMatcher {
-    private static Object[] hasRead = new Object[500];
+    private static final int initSize=2000;
+    private static Object[] hasRead = new Object[initSize];
     private static int curr=0;
     private static Object currentTarget=null;
 
@@ -21,8 +23,6 @@ public class EMObjectMatcher {
         if(curr==hasRead.length){
             hasRead=Arrays.copyOf(hasRead,hasRead.length*2);
         }
-        if(curr % 50000==0)
-            System.out.println("EM-ObjectMatcher Handling : currTarget:"+currentTarget+",handleCount:"+curr+"-"+(curr+50000)+"...");
         hasRead[curr]=o;
         curr++;
     }
@@ -31,19 +31,22 @@ public class EMObjectMatcher {
     }
 
     public static class FieldInfo {
-        public FieldInfo(int index) {
+        public FieldInfo(int index,List<String> trace) {
             this.index = index;
             this.isArrayIndex = true;
+            this.fieldTrace=trace;
         }
 
-        public FieldInfo(Field field) {
+        public FieldInfo(Field field,List<String> trace) {
             this.nativeField = field;
             this.isArrayIndex = false;
+            this.fieldTrace=trace;
         }
 
         private final boolean isArrayIndex;
         private Field nativeField;
         private int index;
+        List<String> fieldTrace;
 
         public boolean isArrayIndex() {
             return isArrayIndex;
@@ -56,21 +59,26 @@ public class EMObjectMatcher {
         public int getIndex() {
             return index;
         }
+
+        public List<String> getFieldTrace() {
+            return fieldTrace;
+        }
     }
 
     public static Map<Object,List<FieldInfo>> match(Object src, Object target) {
         if(target!=currentTarget){
-            hasRead=new Object[500];
+            System.out.println("em-matcher: handle object : "+target);
+            hasRead=new Object[initSize];
             curr=0;
             currentTarget=target;
         }
         EMObjectMatcher result = new EMObjectMatcher();
-        result.getAllDeclaredFieldsHierarchy(src, result.holdingObject, target);
+        result.getAllDeclaredFieldsHierarchy(src, result.holdingObject, target,new ArrayList<String>(){{add(src.getClass().getName());}});
         return result.holdingObject;
     }
 
 
-    private void getAllDeclaredFieldsHierarchy(Object src, Map<Object, List<FieldInfo>> holdingObject, Object target) {
+    private void getAllDeclaredFieldsHierarchy(Object src, Map<Object, List<FieldInfo>> holdingObject, Object target,List<String> trace) {
         if (src == null || hasRead(src)) {
             return;
         }
@@ -83,23 +91,24 @@ public class EMObjectMatcher {
                 if (value == null) {
                     continue;
                 }
-                if (field.getType().isArray()) {
-                    findInArray((Object[]) value, holdingObject, target);
+                List<String> newTrace=createTrace(trace,field,value,-1);
+                if (field.getType().isArray() && isReferenceField(field.getType())) {
+                    findInArray((Object[]) value, holdingObject, target,newTrace);
                     continue;
                 }
                 if (value == target) {
                     if (holdingObject.get(src) == null)
                         holdingObject.computeIfAbsent(src, k -> new ArrayList<>());
-                    holdingObject.get(src).add(new FieldInfo(field));
+                    holdingObject.get(src).add(new FieldInfo(field,newTrace));
                 }
-                getAllDeclaredFieldsHierarchy(value, holdingObject, target);
+                getAllDeclaredFieldsHierarchy(value, holdingObject, target,newTrace);
             }
         }catch (Exception ex){
             ex.printStackTrace();
         }
     }
 
-    private void findInArray(Object[] src, Map<Object, List<FieldInfo>> holdingObject, Object target) {
+    private void findInArray(Object[] src, Map<Object, List<FieldInfo>> holdingObject, Object target,List<String> trace) {
         if (src == null || hasRead(src)) {
             return;
         }
@@ -109,25 +118,40 @@ public class EMObjectMatcher {
             if (value == null) {
                 continue;
             }
+            List<String> newTrace=createTrace(trace,null,value,i);
             if (value.getClass().isArray() && isReferenceField(value.getClass())) {
-                findInArray((Object[]) value, holdingObject, target);
+                findInArray((Object[]) value, holdingObject, target,newTrace);
                 continue;
             }
             if (value == target) {
                 if (holdingObject.get(src) == null)
                     holdingObject.computeIfAbsent(src, k -> new ArrayList<>());
-                holdingObject.get(src).add(new FieldInfo(i));
+                holdingObject.get(src).add(new FieldInfo(i,newTrace));
             }
-            getAllDeclaredFieldsHierarchy(value, holdingObject, target);
+            getAllDeclaredFieldsHierarchy(value, holdingObject, target,newTrace);
         }
     }
 
-
-    private boolean isReferenceField(Class<?> type) {
-        while(type.isArray()){
-            type=type.getComponentType();
+    private List<String> createTrace(List<String> old,Field field,Object fieldValue,int index){
+        List<String> newTrace=new ArrayList<>(old);
+        if(field!=null) {
+            newTrace.add(field.getType().getSimpleName() +"("+ fieldValue.getClass().getSimpleName()+") : "+ field.getName());
+        }else{
+            newTrace.add(":"+index);
         }
-        return !type.isEnum() && !type.isPrimitive() && type != String.class
+        return newTrace;
+    }
+
+    private Class<?> getRawType(Class<?> srcType){
+        if(srcType.isArray()){
+            srcType=srcType.getComponentType();
+        }
+        return srcType;
+    }
+
+    private boolean isReferenceField(Class<?> srcType) {
+        Class<?> type=getRawType(srcType);
+        return  !type.isEnum() && !type.isPrimitive() && type != String.class
                 && type != Character.class && type != Boolean.class
                 && type != Byte.class && type != Short.class && type != Integer.class && type != Long.class
                 && type != Float.class && type != Double.class;

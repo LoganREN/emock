@@ -1,0 +1,170 @@
+<html>
+<head>
+    <title>MockManager</title>
+</head>
+<body>
+<div>
+    <div style="width: 53%;height: 95%;float:left">
+        <div>
+            <span>clzName:</span>&nbsp;<input type="text" id="clzName" style="width:300px"/>
+            <input type="button" value="query" id="query"/>
+            <input type="checkbox" id="includeBean" checked="checked">
+            <label for="includeBean">show mock bean info</label>
+            <input type="checkbox" id="includeProxy">
+            <label for="includeProxy">show mock proxy info</label>
+        </div>
+        <span style="float:left">context:</span><input style="float:right" type="button" value="update" id="update"/>
+        <br/>
+        <textarea id="context" style="width: 100%;height: 100%;"></textarea>
+        <br/>
+    </div>
+    <div style="width:45%;height:95%;float:right">
+        <div>
+            <span>dynamic invoker:</span><br/>
+            <input type="text" id="mockBeanId" placeholder="mockBeanId">
+            <input type="text" id="methodName" placeholder="methodName">
+            <input type="text" id="invokerName" placeholder="invokerName">
+            <br/>
+            <input id="decode" type="button" value="decode"/>
+            <input id="removeInovker" type="button" value="removeInovker">
+            <input type="button" value="saveLocal" id="saveLocal">
+        </div>
+        <div>
+            <span>Encode Code:</span>
+            <textarea id="encodeCode" style="width:100%;height:10%"></textarea>
+        </div>
+        <div>
+            <span>import part:</span>
+            <textarea id="importPart" style="width:100%;height:25%"></textarea>
+        </div>
+        <div>
+            <span>code part:</span><br/>
+            <label style="position:absolute;font-size:small;width:100%">@Override<br/>
+                public Object invoke(
+                SimpleInvoker oldMethod,
+                SimpleInvoker newMethod,
+                Object[] args) {
+            </label>
+            <textarea id="codePart" style="width:100%;height:55%;padding-top:40px;"></textarea>
+        </div>
+    </div>
+</div>
+
+</body>
+<script type="text/javascript">
+        var co="";
+        document.getElementById('query').onclick=function(){
+            var xhr=new XMLHttpRequest();
+            var clzName=document.getElementById("clzName").value;
+            var includeBean=document.getElementById('includeBean').checked;
+            var includeProxy=document.getElementById('includeProxy').checked;
+            xhr.open("post","/mzh/em/manager/query?oldBeanName="+encodeURIComponent(clzName)+"&includeBean="+includeBean+"&includeProxy="+includeProxy);
+            xhr.onload=function(){
+                if(xhr.status==200){
+                    co=JSON.parse(xhr.responseText);
+                    document.getElementById("context").value=JSON.stringify(co,null,'   ');
+                }else{
+                    alert(xhr.status+"-"+xhr.statusText);
+                }
+            }
+            xhr.send();
+        }
+        document.getElementById('update').onclick=function(){
+            var xhr=new XMLHttpRequest();
+            var clzName=document.getElementById("context").value;
+            xhr.open("post","/mzh/em/manager/update");
+            xhr.setRequestHeader('Content-Type','application/json');
+            xhr.onload=function(){
+                if(xhr.status==200){
+                   alert(xhr.responseText);
+                   document.getElementById('query').click();
+                }else{
+                    alert(xhr.status+"-"+xhr.statusText);
+                }
+            }
+            xhr.send(document.getElementById("context").value);
+        }
+
+
+        //本次操作类别
+        function findInvoker(onlyParent){
+            var beanId=document.getElementById('mockBeanId').value;
+            var methodName=document.getElementById('methodName').value;
+            var invokerName=document.getElementById('invokerName').value;
+            var parent=null;
+            for(var i=0;i<co.length;i++){
+                var targetClzs=Object.keys(co[i].emInfo.beanInfo);
+                for(var j=0;j<targetClzs.length;j++){
+                    var beans=co[i].emInfo.beanInfo[targetClzs[j]];
+                    for(var f=0;f<beans.length;f++){
+                    if(beans[f].id==beanId){
+                        for(var k=0;k<beans[f].methodInfo.length;k++){
+                            if(beans[f].methodInfo[k].methodName==methodName){
+                                var invokers=beans[f].methodInfo[k].dynamicInvokes;
+                                var invokerNames=Object.keys(invokers);
+                                for(var x=0;x<invokerNames.length;x++){
+                                    if(invokerNames[x]==invokerName){
+                                       // invoker=invokers[invokerName];
+                                        parent=beans[f].methodInfo[k].dynamicInvokes;
+                                    }
+                                }
+                                if(parent==null && onlyParent){
+                                    parent=beans[f].methodInfo[k].dynamicInvokes;
+                                }
+                            }
+                        }
+                    }
+                    }
+                }
+            }
+            return parent;
+        }
+
+        document.getElementById('decode').onclick=function(){
+            var parent=findInvoker(false);
+            if(parent==null){
+                alert('no matched invoker');
+                return;
+            }
+            var invokerName=document.getElementById('invokerName').value;
+            var code=parent[invokerName].srcCode;
+            var importPart=code.split('_')[0];
+            var codePart=code.split('_')[1];
+            document.getElementById('encodeCode').value=code;
+            document.getElementById('importPart').value=atob(importPart);
+            document.getElementById('codePart').value=atob(codePart);
+        }
+        document.getElementById("removeInovker").onclick=function(){
+            var parent=findInvoker(false);
+            if(parent==null){
+                alert('no matched invoker');
+                return;
+            }
+            var invokerName=document.getElementById('invokerName').value;
+            delete parent[invokerName];
+            document.getElementById('context').value=JSON.stringify(co,null,'   ');
+        }
+
+        document.getElementById("saveLocal").onclick=function(){
+            var parent=findInvoker(true);
+            if(parent==null){
+                alert("no matched invoker");
+               return;
+            }
+            var invokerName=document.getElementById('invokerName').value;
+                var importPart=btoa(document.getElementById('importPart').value);
+                var codePart=btoa(document.getElementById('codePart').value);
+                var encCode=importPart+"_"+codePart;
+                document.getElementById('encodeCode').value=encCode;;
+                parent[invokerName]={"srcCode":encCode};
+                document.getElementById('context').value=JSON.stringify(co,null,'   ');
+           
+        }
+
+
+        
+
+
+</script>
+</html>
+</div>

@@ -4,8 +4,8 @@ import com.mzh.emock.EMConfigurationProperties;
 import com.mzh.emock.core.EMSupport;
 import com.mzh.emock.log.Logger;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationListener;
+import org.springframework.context.support.AbstractApplicationContext;
 import org.springframework.core.Ordered;
 import org.springframework.core.io.ResourceLoader;
 
@@ -15,10 +15,10 @@ import java.time.temporal.ChronoUnit;
 public class EMApplicationReadyProcessor implements ApplicationListener<ApplicationReadyEvent>, Ordered {
     private static final Logger logger= Logger.get(EMApplicationReadyProcessor.class);
 
-    private final ApplicationContext context;
+    private final AbstractApplicationContext context;
     private final ResourceLoader resourceLoader;
 
-    public EMApplicationReadyProcessor(ApplicationContext context, ResourceLoader resourceLoader){
+    public EMApplicationReadyProcessor(AbstractApplicationContext context, ResourceLoader resourceLoader){
         logger.info("EMApplicationReadyProcessor loaded");
         this.context=context;
         this.resourceLoader=resourceLoader;
@@ -30,7 +30,6 @@ public class EMApplicationReadyProcessor implements ApplicationListener<Applicat
     public void onApplicationEvent(ApplicationReadyEvent applicationReadyEvent) {
         Thread main=Thread.currentThread();
         new Thread(()->{
-            logger.info("emock : waiting for other application listener ready");
             LocalDateTime startTime= LocalDateTime.now();
             long maxWaiting= EMConfigurationProperties.WAIT_FOR_APPLICATION_READY;
             try{
@@ -43,19 +42,24 @@ public class EMApplicationReadyProcessor implements ApplicationListener<Applicat
                 logger.info("emock : wait for main thread complete until "+maxWaiting+" stop mock initial");
                 return;
             }
-            logger.info("emock : init processor start");
             initialMockBeans();
-            logger.info("emock : init processor complete");
         },"EMThread").start();
     }
     private void initialMockBeans() {
         try {
+            LocalDateTime initStart= LocalDateTime.now();
+            logger.info("emock : init processor start , time:"+initStart);
             EMSupport.loadEMDefinitionSource(context, resourceLoader);
             EMSupport.createEMDefinition(context);
             EMSupport.createEMBeanIfNecessary(context);
             EMSupport.proxyAndInject(context);
+            LocalDateTime initEnd=LocalDateTime.now();
+            logger.info("emock : init processor complete, time: "+ initEnd
+                    +", cost : "+initStart.until(initEnd,ChronoUnit.MILLIS)/1000.00+"s");
         }catch (Exception ex){
            logger.error("emock : init error",ex);
+        }finally {
+
         }
     }
 

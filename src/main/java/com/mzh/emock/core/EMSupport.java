@@ -3,14 +3,20 @@ package com.mzh.emock.core;
 import com.mzh.emock.EMConfigurationProperties;
 import com.mzh.emock.log.Logger;
 import com.mzh.emock.type.EMBean;
+import com.mzh.emock.type.EMRelatedObject;
 import com.mzh.emock.type.bean.EMBeanInfo;
 import com.mzh.emock.type.bean.definition.EMBeanDefinitionSource;
 import com.mzh.emock.type.bean.definition.EMBeanDefinition;
+import com.mzh.emock.type.proxy.EMProxyHolder;
 import com.mzh.emock.util.EMObjectMap;
 import com.mzh.emock.util.EMObjectMatcher;
 import com.mzh.emock.util.EMProxyTool;
 import com.mzh.emock.util.EMUtil;
+import org.springframework.beans.factory.config.BeanDefinition;
+import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.context.ApplicationContext;
+import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.context.support.AbstractApplicationContext;
 import org.springframework.core.env.Environment;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
@@ -27,30 +33,34 @@ import java.util.*;
 public class EMSupport {
     private static final Logger logger = Logger.get(EMSupport.class);
 
-    public static void loadEMDefinitionSource(ApplicationContext context, ResourceLoader loader) throws Exception {
-        if (context == null || loader == null) {
+    public static void loadEMDefinitionSource(ApplicationContext context, ResourceLoader resLoader) throws Exception {
+        if (context == null || resLoader == null) {
             return;
         }
         EMCache.EM_DEFINITION_SOURCES.clear();
         String[] matchers = loadEMNameMatcher(context);
-        List<Method> methods = loadEMDefinitionSources(loader);
-        methods.stream().filter(m->PatternMatchUtils.simpleMatch(matchers,
-                ((ParameterizedType) m.getGenericReturnType()).getActualTypeArguments()[0].getTypeName()))
-                .forEach(m->EMCache.EM_DEFINITION_SOURCES.add(new EMBeanDefinitionSource<>(m)));
+        List<Method> methods = loadEMDefinitionSources(resLoader);
+        ClassLoader clzLoader=EMSupport.class.getClassLoader();
+        for (Method m : methods) {
+            String typeName=((ParameterizedType) m.getGenericReturnType()).getActualTypeArguments()[0].getTypeName();
+            if (PatternMatchUtils.simpleMatch(matchers,typeName)) {
+                EMCache.EM_DEFINITION_SOURCES.add(new EMBeanDefinitionSource<>(m,clzLoader));
+            }
+        }
         logger.info("emock : load definitionSource complete : "+EMCache.EM_DEFINITION_SOURCES.size());
     }
 
     public static void createEMDefinition(ApplicationContext context) throws Exception {
-        EMCache.EM_DEFINITIONS.clear();
         for (EMBeanDefinitionSource<?> ds : EMCache.EM_DEFINITION_SOURCES) {
-            EMBeanDefinition<?> beanInfoDefinition = ds.getMethodInvoker().invoke(context);
-            EMCache.EM_DEFINITION_RELATION.put(beanInfoDefinition, ds);
-            EMCache.EM_DEFINITIONS.add(beanInfoDefinition);
+            ds.createBeanDefinition(context);
         }
     }
 
-    public static void createEMBeanIfNecessary(ApplicationContext context) {
-        Arrays.stream(context.getBeanDefinitionNames()).forEach(name-> createEMBeanIfNecessary(name, context.getBean(name)));
+    public static void createEMBeanIfNecessary(AbstractApplicationContext context) {
+        ConfigurableListableBeanFactory factory=context.getBeanFactory();
+        Arrays.stream(context.getBeanDefinitionNames()).forEach(
+                name-> createEMBeanIfNecessary(name, context.getBean(name),factory.getBeanDefinition(name))
+        );
     }
 
     /**
@@ -59,24 +69,21 @@ public class EMSupport {
      * @param beanName
      * @param oldBean
      */
-    public static void createEMBeanIfNecessary(String beanName, Object oldBean) {
-        EMCache.EM_DEFINITIONS.stream().filter(d->d.isMatch(beanName,oldBean)).forEach(d->{
-            EMCache.EM_OBJECT_MAP.computeIfAbsent(oldBean,l->new EMObjectMap<>());
-            EMBeanInfo<?> newBean=createMockBean(oldBean,d);
-            Class<?> defClz=newBean.getEmBeanDefinition().getClassMatcher();
-            EMCache.EM_OBJECT_MAP.get(oldBean).computeIfAbsent(defClz,k->new ArrayList<>());
-            EMCache.EM_OBJECT_MAP.get(oldBean).get(defClz).add(newBean);
-            EMCache.EM_OBJECT_MAP.values().forEach(m->m.values().forEach(
-                    l->l.sort(Comparator.comparingInt(a -> a.getEmBeanDefinitionSource().getOrder()))));
-        });
+    public static void createEMBeanIfNecessary(String beanName, Object oldBean, BeanDefinition oldDefinition) {
+        EMCache.EM_DEFINITION_SOURCES.stream().filter(ds->ds.getBeanDefinition().isMatch(beanName,oldBean))
+                .forEach(ds->{
+                    EMCache.EM_OBJECT_MAP.computeIfAbsent(oldBean,r->new EMRelatedObject(beanName,oldBean));
+                    EMBeanInfo<?> newBean=createMockBean(oldBean,ds);
+                    EMCache.EM_OBJECT_MAP.get(oldBean).setOldDefinition(oldDefinition);
+                    Map<Class<?>,List<EMBeanInfo<?>>> infoMap=EMCache.EM_OBJECT_MAP.get(oldBean).getEmInfo();
+                    infoMap.computeIfAbsent(ds.getTargetClz(),l->new ArrayList<>());
+                    infoMap.get(ds.getTargetClz()).add(newBean);
+                    infoMap.get(ds.getTargetClz()).sort(Comparator.comparingInt(e->e.getDefinitionSource().getOrder()));
+                });
     }
 
-    private static <T> EMBeanInfo<T> createMockBean(Object oldBean, EMBeanDefinition<T> emBeanDefinition) {
-        T nb = emBeanDefinition.getWrapper().wrap(emBeanDefinition.getClassMatcher().cast(oldBean));
-        EMBeanDefinitionSource<T> ds= (EMBeanDefinitionSource<T>) EMCache.EM_DEFINITION_RELATION.get(emBeanDefinition);
-        EMBeanInfo<T> i=new EMBeanInfo<>(nb, emBeanDefinition,ds);
-        i.setMocked(true);
-        return i;
+    private static <T> EMBeanInfo<T> createMockBean(Object oldBean, EMBeanDefinitionSource<T> ds) {
+        return new EMBeanInfo<>(ds.getBeanDefinition().getWrapper().wrap(ds.getTargetClz().cast(oldBean)),ds);
     }
 
     /**
@@ -106,21 +113,23 @@ public class EMSupport {
             Object old=((Object[])holder)[info.getIndex()];
             if(old==target) {
                 Class<?> clz=findBestMatchClz(target,info.getNativeField().getType().getComponentType());
-                Object proxy = EMProxyTool.createProxy(clz, target);
-                ((Object[]) holder)[info.getIndex()] = proxy;
+                EMProxyHolder proxyHolder = EMProxyTool.createProxy(clz, target);
+                proxyHolder.addInjectField(info);
+                ((Object[]) holder)[info.getIndex()] = proxyHolder.getProxy();
             }else{
                 logger.error("array object index changed "+",obj:"+holder);
             }
         }else{
             Class<?> clz=findBestMatchClz(target,info.getNativeField().getType());
-            Object proxy= EMProxyTool.createProxy(clz, target);
+            EMProxyHolder proxyHolder= EMProxyTool.createProxy(clz, target);
+            proxyHolder.addInjectField(info);
             info.getNativeField().setAccessible(true);
-            info.getNativeField().set(holder,proxy);
+            info.getNativeField().set(holder,proxyHolder.getProxy());
         }
     }
 
     private static Class<?> findBestMatchClz(Object oldBean,Class<?> fieldClz){
-        Set<Class<?>> curr=EMCache.EM_OBJECT_MAP.get(oldBean).keySet();
+        Set<Class<?>> curr=EMCache.EM_OBJECT_MAP.get(oldBean).getEmInfo().keySet();
         Class<?> bestMatch=null;
         for(Class<?> c:curr){
             if(fieldClz.isAssignableFrom(c)){

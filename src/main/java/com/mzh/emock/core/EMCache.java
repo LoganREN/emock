@@ -1,5 +1,6 @@
 package com.mzh.emock.core;
 
+import com.mzh.emock.type.EMRelatedObject;
 import com.mzh.emock.type.bean.EMBeanInfo;
 import com.mzh.emock.type.bean.definition.EMBeanDefinitionSource;
 import com.mzh.emock.type.bean.definition.EMBeanDefinition;
@@ -8,6 +9,7 @@ import com.mzh.emock.type.bean.method.EMMethodInvoker;
 import com.mzh.emock.type.bean.method.EMMethodInvoker.*;
 import com.mzh.emock.type.proxy.EMProxyHolder;
 import com.mzh.emock.util.EMObjectMap;
+import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.cglib.proxy.MethodInterceptor;
 import org.springframework.cglib.proxy.MethodProxy;
 
@@ -17,18 +19,17 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class EMCache {
 
+    public static final Object lock=new Object();
+
+    public static AtomicLong idSequence=new AtomicLong(0);
+
     public static final List<EMBeanDefinitionSource<?>> EM_DEFINITION_SOURCES = new ArrayList<>();
 
-    public static final List<EMBeanDefinition<?>> EM_DEFINITIONS = new ArrayList<>();
-
-    public static final Map<EMBeanDefinition<?>, EMBeanDefinitionSource<?>> EM_DEFINITION_RELATION=new EMObjectMap<>();
-
-    public static final Map<Object, Map<Class<?>,List<EMBeanInfo<?>>>> EM_OBJECT_MAP = new EMObjectMap<>();
-
-    public static final List<EMProxyHolder> EM_CACHED_PROXY = new ArrayList<>();
+    public static final Map<Object, EMRelatedObject> EM_OBJECT_MAP = new EMObjectMap<>();
 
     static class ESimpleInvoker implements SimpleInvoker<Object, Object[]> {
         private final Object bean;
@@ -46,11 +47,11 @@ public class EMCache {
     }
 
     private static Object doMock(Object o, Method method, Object[] args, Object oldBean,Class<?> injectClz) throws Exception {
-        Map<Class<?>,List<EMBeanInfo<?>>> clzBeanMap = EM_OBJECT_MAP.get(oldBean);
-        if (clzBeanMap == null || clzBeanMap.size()==0) {
-            return null;
+        List<EMBeanInfo<?>> mockBeanInfoList=null;
+        if (EM_OBJECT_MAP.get(oldBean) != null &&  EM_OBJECT_MAP.get(oldBean).getEmInfo()!=null
+                && EM_OBJECT_MAP.get(oldBean).getEmInfo().get(injectClz)!=null) {
+            mockBeanInfoList=EM_OBJECT_MAP.get(oldBean).getEmInfo().get(injectClz);
         }
-        List<EMBeanInfo<?>> mockBeanInfoList= clzBeanMap.get(injectClz);
         if(mockBeanInfoList==null || mockBeanInfoList.size()==0){
             return null;
         }
@@ -58,11 +59,13 @@ public class EMCache {
             if(mockBeanInfo.isMocked()){
                 Map<String, EMMethodInfo> invokeMethods = mockBeanInfo.getInvokeMethods();
                 EMMethodInfo methodInfo = invokeMethods.get(method.getName());
-                if (methodInfo.getEnabledInvoker() != null) {
-                    EMMethodInvoker<Object, Object[]> dynamicInvoker = methodInfo.getDynamicInvokers().get(methodInfo.getEnabledInvoker());
-                    return dynamicInvoker.invoke(new ESimpleInvoker(oldBean, method), new ESimpleInvoker(mockBeanInfo.getMockedBean(), method), args);
+                if(methodInfo.isMock()) {
+                    if (methodInfo.getDynamicInvokerName() != null) {
+                        EMMethodInvoker<Object, Object[]> dynamicInvoker = methodInfo.getDynamicInvokers().get(methodInfo.getDynamicInvokerName());
+                        return dynamicInvoker.invoke(new ESimpleInvoker(oldBean, method), new ESimpleInvoker(mockBeanInfo.getMockedBean(), method), args);
+                    }
+                    return method.invoke(mockBeanInfo.getMockedBean(), args);
                 }
-                return method.invoke(mockBeanInfo.getMockedBean(), args);
             }
         }
         return null;

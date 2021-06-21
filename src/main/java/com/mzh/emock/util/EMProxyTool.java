@@ -1,6 +1,7 @@
 package com.mzh.emock.util;
 
 import com.mzh.emock.core.EMCache;
+import com.mzh.emock.type.EMRelatedObject;
 import com.mzh.emock.type.proxy.EMProxyHolder;
 import org.springframework.cglib.proxy.Enhancer;
 import org.springframework.cglib.proxy.MethodInterceptor;
@@ -11,16 +12,16 @@ import java.lang.reflect.Proxy;
 
 public class EMProxyTool {
 
-    public static Object createProxy(Class<?> targetClz, Object oldBean) {
-        Object cached=findCreatedProxy(targetClz,oldBean);
+    public static EMProxyHolder createProxy(Class<?> targetClz, Object oldBean) {
+        EMProxyHolder cached=findCreatedProxy(targetClz,oldBean);
         if(cached!=null){
             return cached;
         }
         ClassLoader loader= EMProxyTool.class.getClassLoader();
         Object proxy=(targetClz.isInterface() ? createInterfaceProxy(new Class<?>[]{targetClz}, oldBean,loader)
                 : createClassProxy(oldBean,loader,targetClz));
-        EMCache.EM_CACHED_PROXY.add(new EMProxyHolder(oldBean,targetClz,proxy));
-        return proxy;
+        EMCache.EM_OBJECT_MAP.get(oldBean).getProxyHolder().put(targetClz,new EMProxyHolder(proxy));
+        return EMCache.EM_OBJECT_MAP.get(oldBean).getProxyHolder().get(targetClz);
     }
 
     private static Object createInterfaceProxy(Class<?>[] interfaces, Object oldBean,ClassLoader loader) {
@@ -37,15 +38,14 @@ public class EMProxyTool {
         return createEnhance(oldBean, new EMCache.EObjectEnhanceInterceptor(oldBean,injectClz),loader);
     }
 
-    private static Object findCreatedProxy(Class<?> targetClz,Object oldBean){
-        for(EMProxyHolder holder:EMCache.EM_CACHED_PROXY){
-            if(holder.matched(targetClz,oldBean)){
-                return holder.getProxy();
-            }
+    private static EMProxyHolder findCreatedProxy(Class<?> targetClz,Object oldBean){
+        EMRelatedObject relation=EMCache.EM_OBJECT_MAP.get(oldBean);
+        if(relation==null){
+            return null;
         }
-        return null;
+        return relation.getProxyHolder().get(targetClz);
     }
-
+    @SuppressWarnings("unchecked")
     private static <T> T createEnhance(T old, MethodInterceptor methodInterceptor, ClassLoader loader) {
         Enhancer enhancer = new Enhancer();
         enhancer.setSuperclass(old.getClass());

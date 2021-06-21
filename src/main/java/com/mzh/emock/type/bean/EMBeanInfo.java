@@ -1,5 +1,7 @@
 package com.mzh.emock.type.bean;
 
+import com.mzh.emock.EMConfigurationProperties;
+import com.mzh.emock.core.EMCache;
 import com.mzh.emock.type.bean.definition.EMBeanDefinitionSource;
 import com.mzh.emock.type.bean.definition.EMBeanDefinition;
 import com.mzh.emock.type.bean.method.EMMethodInfo;
@@ -12,29 +14,35 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class EMBeanInfo<T>{
 
+    private long id;
     private boolean isMocked;
     private T mockedBean;
-    private EMBeanDefinition<T> emBeanDefinition;
-    private EMBeanDefinitionSource<T> emBeanDefinitionSource;
+    private EMBeanDefinitionSource<T> definitionSource;
     private Map<String, EMMethodInfo> invokeMethods=new ConcurrentHashMap<>();
 
     public EMBeanInfo(@NonNull T mockedBean,
-                      @NonNull EMBeanDefinition<T> emBeanDefinition,
-                      @NonNull EMBeanDefinitionSource<T> emBeanDefinitionSource){
+                      @NonNull EMBeanDefinitionSource<T> definitionSource){
+        this.id= EMCache.idSequence.getAndIncrement();
+        this.isMocked= EMConfigurationProperties.MOCK_BEAN_ON_INIT;
         this.mockedBean=mockedBean;
-        this.emBeanDefinition=emBeanDefinition;
-        this.emBeanDefinitionSource=emBeanDefinitionSource;
-        EMUtil.optWithParent(emBeanDefinition.getClassMatcher(), c->{
+        this.definitionSource=definitionSource;
+        EMUtil.optWithParent(definitionSource.getTargetClz(), c->{
             if(c!=Object.class) {
                 Method[] methods = c.getDeclaredMethods();
                 for(Method method:methods) {
-                    EMMethodInfo methodInfo=new EMMethodInfo();
-                    methodInfo.setName(method.getName());
-                    methodInfo.setNativeMethod(method);
+                    EMMethodInfo methodInfo=new EMMethodInfo(method);
                     this.invokeMethods.put(method.getName(),methodInfo);
                 }
             }
         });
+    }
+
+    public long getId() {
+        return id;
+    }
+
+    public void setId(long id) {
+        this.id = id;
     }
 
     public boolean isMocked() {
@@ -53,20 +61,12 @@ public class EMBeanInfo<T>{
         this.mockedBean = mockedBean;
     }
 
-    public EMBeanDefinition<T> getEmBeanDefinition() {
-        return emBeanDefinition;
+    public EMBeanDefinitionSource<T> getDefinitionSource() {
+        return definitionSource;
     }
 
-    public void setEmBeanDefinition(EMBeanDefinition<T> emBeanDefinition) {
-        this.emBeanDefinition = emBeanDefinition;
-    }
-
-    public EMBeanDefinitionSource<T> getEmBeanDefinitionSource() {
-        return emBeanDefinitionSource;
-    }
-
-    public void setEmBeanDefinitionSource(EMBeanDefinitionSource<T> emBeanDefinitionSource) {
-        this.emBeanDefinitionSource = emBeanDefinitionSource;
+    public void setDefinitionSource(EMBeanDefinitionSource<T> definitionSource) {
+        this.definitionSource = definitionSource;
     }
 
     public Map<String, EMMethodInfo> getInvokeMethods() {
@@ -76,4 +76,6 @@ public class EMBeanInfo<T>{
     public void setInvokeMethods(Map<String, EMMethodInfo> invokeMethods) {
         this.invokeMethods = invokeMethods;
     }
+
+
 }
